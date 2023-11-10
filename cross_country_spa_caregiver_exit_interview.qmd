@@ -1,0 +1,589 @@
+---
+title: "SPA caregiver exit interviews"
+author: "Hélène LANGET"
+format:
+  docx:
+    reference-doc: "../templates/word_styles1.docx"
+    toc: true
+    toc-depth: 3
+editor: visual
+number-sections: true
+execute: 
+  echo: false
+  warning: false
+params:
+  country: "senegal"
+---
+
+# Overview
+
++-----------------------+----------------------------------------------------------------------------------------------------+
+| *Target participants* | Caregivers                                                                                         |
++-----------------------+----------------------------------------------------------------------------------------------------+
+| *Objectives*          | -   To understand caregiver experience / satisfaction of consultation                              |
+|                       |                                                                                                    |
+|                       |     -   Pulse oximetry                                                                             |
+|                       |                                                                                                    |
+|                       |     -   CDSA                                                                                       |
+|                       |                                                                                                    |
+|                       |     -   IMCI -- diagnosis / treatment                                                              |
+|                       |                                                                                                    |
+|                       | -   Understand care seeking behaviour (prior to consultation)                                    |
+|                       |                                                                                                    |
+|                       | -   Understanding of referral advice                                                               |
+|                       |                                                                                                    |
+|                       | -   Understanding of treatment / follow-up advice                                                  |
+|                       |                                                                                                    |
+|                       | -   To capture individual level factors (confounders / effect modifiers / sub-groups) for analyses |
++-----------------------+----------------------------------------------------------------------------------------------------+
+
+```{r}
+#| output: false
+Sys.setenv(LANG = "en")
+Sys.setlocale("LC_TIME", "English")
+```
+
+```{r}
+# Manipulation des données
+library(dplyr)
+# Manipulation des fichiers Excel
+library(openxlsx) 
+#Dates
+library(lubridate)
+# Graphiques
+library(ggplot2) # graphiques
+library(gridExtra)
+library(viridis)
+library(ggrepel)
+library(ComplexUpset)
+# Analyses geographiques
+library(sf)
+library(sp)
+# Décrire la structure des données
+library(skimr) 
+library(DataExplorer)
+# Statistiques descriptives
+library(gtsummary)
+library(ggpubr)
+```
+
+```{r}
+country <- params$country
+is_kenya <- (country == "kenya")
+is_senegal <- (country == "senegal")
+is_tanzania <- (country == "tanzania")
+is_india <- (country == "india")
+country_dir <- paste0("data_", country)
+```
+
+```{r}
+#| eval: !expr is_tanzania
+arm_comparisons <- list(c("Arm I", "Arm III"),
+                        c("Arm II", "Arm III"))
+```
+
+```{r}
+fs1 <- 16
+fs2 <- 6
+```
+
+```{r}
+day0_df <- openxlsx::read.xlsx(paste0("../", country_dir ,"/main/02_timci_day0_data.xlsx")) %>%
+  dplyr::mutate(week = lubridate::floor_date(as.Date(date_visit), "week", week_start = getOption("lubridate.week.start", 1))) %>%
+  dplyr::rename(date = date_visit)
+```
+
+```{r}
+SPA_EXIT_MAIN <- openxlsx::read.xlsx(paste0("../", country_dir ,"/spa/13_timci_spa_exit_interview_data.xlsx")) %>%
+  dplyr::mutate(week = lubridate::floor_date(as.Date(date), "week", week_start = getOption("lubridate.week.start", 1))) %>% 
+  dplyr::mutate(month = lubridate::floor_date(as.Date(date), "month", week_start = getOption("lubridate.week.start", 1))) %>% 
+  dplyr::rename(fid = fcode)
+```
+
+```{r}
+hf_coords <- openxlsx::read.xlsx(paste0("../", country_dir ,"/timci_research_facilities.xlsx"))
+```
+
+```{r}
+#| eval: !expr is_tanzania
+hf_coords <- hf_coords %>%
+  dplyr::mutate(intervention = replace(intervention, intervention == 0, "Arm III"),
+                intervention = replace(intervention, intervention == 1, "Arm II"),
+                intervention = replace(intervention, intervention == 2, "Arm I"))
+```
+
+```{r}
+#| eval: !expr (!is_senegal)
+spa_hf_coords <- hf_coords %>%
+  dplyr::filter(spa == 1)
+```
+
+```{r}
+#| eval: !expr (is_senegal | is_tanzania)
+spa_hf_coords <- hf_coords %>%
+  dplyr::filter(spa == 1 & pilot == 0)
+spa_facilities <- spa_hf_coords$facility_id
+```
+
+```{r}
+#| eval: !expr is_senegal
+pilot_hf_coords <- hf_coords %>%
+  dplyr::filter(pilot == 1)
+pilot_facilities <- pilot_hf_coords$facility_id
+```
+
+```{r}
+#| eval: !expr is_tanzania
+hf_coords_Kaliua <- hf_coords %>%
+  dplyr::filter(lvl2 == "Kaliua")
+hf_coords_Sengerema <- hf_coords %>%
+  dplyr::filter(lvl2 == "Sengerema")
+hf_coords_Tanga <- hf_coords %>%
+  dplyr::filter(lvl2 == "Tanga")
+
+spa_hf_coords_Kaliua <- spa_hf_coords %>%
+  dplyr::filter(lvl2 == "Kaliua")
+spa_hf_coords_Sengerema <- spa_hf_coords %>%
+  dplyr::filter(lvl2 == "Sengerema")
+spa_hf_coords_Tanga <- spa_hf_coords %>%
+  dplyr::filter(lvl2 == "Tanga")
+```
+
+```{r}
+#| eval: !expr is_senegal
+start_date <- lubridate::floor_date(as.Date("2021-08-16"), "month", week_start = getOption("lubridate.week.start", 1))
+end_date <- lubridate::ceiling_date(as.Date("2023-03-31"), "month", week_start = getOption("lubridate.week.start", 1))
+```
+
+```{r}
+#| eval: !expr is_senegal
+ordered_periods <- c("pilot",
+                     "pre",
+                     "early",
+                     "late")
+ordered_periods2 <- c("pilot",
+                      "early",
+                      "late")
+```
+
+```{r}
+#| eval: !expr is_senegal
+pilot_period <- data.frame(x1 = c(start_date),
+                           x2 = c(as.Date("2021-12-31")),
+                           y1 = c(0),
+                           y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(pilot_hf_coords))) %>%
+  dplyr::bind_cols(pilot_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id))  %>% 
+  dplyr::mutate(label = "PILOT")
+pre_label_date <- as.Date("2022-02-01")
+pre_period <- data.frame(x1 = c(start_date),
+                         x2 = c(as.Date("2022-03-12")),
+                         y1 = c(0),
+                         y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id)) %>% 
+  dplyr::mutate(label = "PRE")
+post_period <- data.frame(x1 = c(as.Date("2022-03-13")),
+                          x2 = c(end_date),
+                          y1 = c(0),
+                          y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id)) %>% 
+  dplyr::mutate(label = "POST")
+strike1_period <- data.frame(x1 = c(as.Date("2022-03-23")),
+                             x2 = c(as.Date("2022-05-11")),
+                             y1 = c(0),
+                             y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id))
+strike2_period <- data.frame(x1 = c(as.Date("2022-06-25")),
+                             x2 = c(as.Date("2022-08-25")),
+                             y1 = c(0),
+                             y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id))
+strike3_period <- data.frame(x1 = c(as.Date("2022-11-05")),
+                             x2 = c(end_date),
+                             y1 = c(0),
+                             y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id))
+```
+
+```{r}
+#| eval: !expr is_kenya
+start_date <- lubridate::floor_date(as.Date("2021-09-13"), "month", week_start = getOption("lubridate.week.start", 1))
+end_date <- lubridate::ceiling_date(as.Date("2023-02-08"), "month", week_start = getOption("lubridate.week.start", 1))
+```
+
+```{r}
+#| eval: !expr is_kenya
+ordered_periods <- c("pre",
+                     "early",
+                     "late")
+ordered_periods2 <- c("early",
+                      "late")
+```
+
+```{r}
+#| eval: !expr is_kenya
+pre_label_date <- as.Date("2022-01-01")
+pre_period <- data.frame(x1 = c(start_date),
+                         x2 = c(as.Date("2022-02-14")),
+                         y1 = c(0),
+                         y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id)) %>% 
+  dplyr::mutate(label = "PRE")
+post_period <- data.frame(x1 = c(as.Date("2022-02-15")),
+                          x2 = c(end_date),
+                          y1 = c(0),
+                          y2 = c(Inf)) %>%
+  dplyr::slice(rep(row_number(), nrow(spa_hf_coords))) %>%
+  dplyr::bind_cols(spa_hf_coords %>%
+                     dplyr::select(facility_id) %>%
+                     dplyr::rename(fid = facility_id)) %>% 
+  dplyr::mutate(label = "POST")
+```
+
+```{r}
+#| eval: !expr is_tanzania
+start_date <- lubridate::floor_date(as.Date("2022-03-28"), "month", week_start = getOption("lubridate.week.start", 1))
+end_date <- lubridate::ceiling_date(as.Date("2023-03-28"), "month", week_start = getOption("lubridate.week.start", 1))
+```
+
+```{r}
+#| eval: !expr is_tanzania
+ordered_periods <- c("Q2",
+                     "Q3",
+                     "Q4",
+                     "Q5")
+```
+
+{{< pagebreak >}}
+
+# Study settings (SPA facilities)
+
+::: center
+```{r}
+#| eval: !expr is_senegal
+hf_coords %>%
+  dplyr::filter(pilot == 1) %>%
+  dplyr::select(facility_id,
+                facility_name) %>%
+  knitr::kable()
+```
+:::
+
+::: center
+```{r}
+hf_coords %>%
+  dplyr::filter(spa == 1) %>%
+  dplyr::select(facility_id,
+                facility_name) %>%
+  knitr::kable()
+```
+:::
+
+```{r}
+#| eval: !expr is_senegal
+SPA_EXIT_MAIN <- SPA_EXIT_MAIN %>%
+  dplyr::mutate(period = dplyr::case_when(fid %in% pilot_hf_coords$facility_id        ~ "pilot",
+                                          date <= "2021-12-31"                        ~ "pre",
+                                          date >= "2022-04-01" & date <= "2022-12-31" ~ "early",
+                                          date > "2022-12-31"                         ~ "late",
+                                          .default                                    = "missing"))
+```
+
+```{r}
+#| eval: !expr is_kenya
+SPA_EXIT_MAIN <- SPA_EXIT_MAIN %>%
+  dplyr::mutate(period = dplyr::case_when(date <= "2021-12-31"                        ~ "pre",
+                                          date >= "2022-03-01" & date <= "2022-09-30" ~ "early",
+                                          date > "2022-10-01"                         ~ "late",
+                                          .default                                    = "missing"))
+```
+
+```{r}
+#| eval: !expr is_tanzania
+SPA_EXIT_MAIN <- SPA_EXIT_MAIN %>%
+  dplyr::mutate(period = dplyr::case_when(date >= "2022-03-28" & date <= "2022-06-27" ~ "Q2",
+                                          date >= "2022-06-28" & date <= "2022-09-27" ~ "Q3",
+                                          date >= "2022-09-28" & date <= "2022-12-27" ~ "Q4",
+                                          date >= "2022-12-28" & date <= "2023-03-28" ~ "Q5",
+                                          .default                                    = "missing")) %>%
+  merge(spa_hf_coords %>%
+          dplyr::select(facility_id,
+                        intervention),
+        by.x = "fid",
+        by.y = "facility_id",
+        all.x = TRUE)
+```
+
+```{r}
+missing_tf <- SPA_EXIT_MAIN %>%
+  dplyr::filter(period == "missing")
+```
+
+```{r}
+SPA_EXIT_MAIN <- SPA_EXIT_MAIN %>%
+  dplyr::filter(period != "missing") %>% 
+  dplyr::mutate(period = factor(period, levels = ordered_periods))
+```
+
+```{r}
+#| eval: !expr is_senegal
+SPA_EXIT_MAIN <- SPA_EXIT_MAIN %>%
+  dplyr::mutate(fid = factor(fid, levels = c(pilot_facilities, spa_facilities)))
+```
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(fid,
+                period) %>%
+  gtsummary::tbl_summary(by = period,
+                         label = list(fid ~ "Facility"),
+                         digits = list(fid ~ c(0, 1)))
+```
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(matched,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(matched ~ "Matched"),
+                         digits = list(matched ~ c(0, 1)))
+```
+
+# Caregiver experience
+
+## Pulse oximetry
+
+```{r}
+#| eval: !expr (is_kenya | is_senegal)
+SPA_EXIT_MAIN %>%
+  dplyr::mutate(period = factor(period, levels = ordered_periods2)) %>% 
+  dplyr::select(e4_1,
+                e4_2,
+                e4_3,
+                period) %>%
+  dplyr::mutate(e4_1 = replace(e4_1, e4_1 == 0, "No"),
+                e4_1 = replace(e4_1, e4_1 == 1, "Yes"),
+                e4_1 = replace(e4_1, e4_1 == 98, "Unknown"),
+                e4_1 = factor(e4_1, levels = c("No", "Yes", "Unknown")),
+                e4_3 = replace(e4_3, e4_3 == 0, "No"),
+                e4_3 = replace(e4_3, e4_3 == 1, "Yes"),
+                e4_3 = replace(e4_3, e4_3 == 98, "Unknown"),
+                e4_3 = factor(e4_3, levels = c("No", "Yes", "Unknown"))) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(e4_1 ~ "Used",
+                                      e4_2 ~ "Understanding",
+                                      e4_3 ~ "Result explained"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n() %>%
+  gtsummary::modify_header(label ~ "**Variable**")
+```
+
+```{r}
+#| eval: !expr (is_tanzania | is_india)
+SPA_EXIT_MAIN %>%
+  dplyr::mutate(period = factor(period, levels = ordered_periods)) %>% 
+  dplyr::select(e4_1,
+                e4_2,
+                e4_3,
+                period) %>% 
+  dplyr::mutate(e4_1 = replace(e4_1, e4_1 == 0, "No"),
+                e4_1 = replace(e4_1, e4_1 == 1, "Yes"),
+                e4_1 = replace(e4_1, e4_1 == 98, "Unknown"),
+                e4_3 = replace(e4_3, e4_3 == 0, "No"),
+                e4_3 = replace(e4_3, e4_3 == 1, "Yes"),
+                e4_3 = replace(e4_3, e4_3 == 98, "Unknown")) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(e4_1 ~ "Used",
+                                      e4_2 ~ "Understanding",
+                                      e4_3 ~ "Result explained"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n() %>%
+  gtsummary::modify_header(label ~ "**Variable**")
+```
+
+## CDSA
+
+```{r}
+#| eval: !expr (is_senegal | is_kenya)
+SPA_EXIT_MAIN %>%
+  dplyr::select(k2_1,
+                k2_2,
+                k2_2a,
+                k2_3,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(k2_1 ~ "Tablet used",
+                                      k2_3 ~ "CDSA satisfaction"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n()
+```
+
+```{r}
+#| eval: !expr (is_tanzania | is_india)
+SPA_EXIT_MAIN %>%
+  dplyr::select(k2_1,
+                k2_2,
+                k2_2a,
+                k2_3,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(k2_1 ~ "Tablet used",
+                                      k2_3 ~ "CDSA satisfaction"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n()
+```
+
+## Consultation satisfaction
+
+-   l3_1 i1) How do you feel overall with the service you received at the facility today?
+-   l3_2 i2) Did you feel the provider treated you and the child with respect?
+-   l3_3 i3) Did you find the provider was kind to you?
+-   l3_4 i4) Did you find the provider showed concern and empathy?
+-   l3_5 i5) Did the provider speak in a language you understand?
+-   l3_6 i6) Was the service delayed or were you kept waiting for a long time?
+-   l3_7 i7) Would you recommend this facility to a friend / family with a sick child?
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(l3_1,
+                l3_2,
+                l3_3,
+                l3_4,
+                l3_5,
+                l3_6,
+                l3_7,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(l3_1 ~ "Overall satisfaction",
+                                      l3_2 ~ "Felt respected",
+                                      l3_3 ~ "Kindness",
+                                      l3_4 ~ "Empathy",
+                                      l3_5 ~ "Accessible language",
+                                      l3_6 ~ "Delayed service",
+                                      l3_7 ~ "Recommend"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n() %>%
+  gtsummary::modify_spanning_header(c("stat_2", "stat_3") ~ "**post**")
+```
+
+# Caregiver understanding
+
+g5_1 e3) Did the provider tell you what illness your child has?
+
+## Referral advice
+
+-   Did the provider refer the child?
+
+Follow-up questions
+
+-   When do you need to complete the referral?
+-   Were you told *why* to go?
+-   Were you told *where* to go?
+-   What do you intend to do now?
+-   What type of facility will you go to?
+-   Where will you look for treatment?
+-   Who will you ask for advice?
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(i4_1,
+                i4_2,
+                i4_4,
+                i4_5,
+                i4_6,
+                i4_6a,
+                i4_6b,
+                i4_6c,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(i4_1 ~ "Referred",
+                                      i4_2 ~ "When",
+                                      i4_4 ~ "Where",
+                                      i4_5 ~ "Why",
+                                      i4_6 ~ "Intention"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n()
+```
+
+## Treatment
+
+-   Did the provider give or prescribe any medicines for the child to take home? (h4_1)
+-   Did the provider explain to you how to give medicines to the child at home? (h4_3)
+-   How confident do you feel in how much of the medication to give each day and how many days to give it? (h4_4)
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(h4_1,
+                h4_3,
+                h4_4,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(h4_1 ~ "Prescribed",
+                                      h4_3 ~ "Explained",
+                                      h4_4 ~ "Understanding"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n() %>%
+  gtsummary::modify_spanning_header(c("stat_2", "stat_3") ~ "**post**")
+```
+
+## Counselling and follow-up advice
+
+j4_2 h1) Were you informed of signs / symptoms that require you to bring the child back to the facility immediately? j4_2a h1.a) Can you specify these signs and symptoms? j4_1 h2) What do you intend to do if the sick child does not get completely better or become worse? j4_1d h2.a) Can you specify what you will do? j4_1a h3) What type of facility will you go to? j4_1b h4) Where will you look for treatment? j4_1c h5) Who will you ask for advice?
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(j4_2,
+                j4_1,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n() %>%
+  gtsummary::modify_spanning_header(c("stat_2", "stat_3") ~ "**post**")
+```
+
+# Care seeking behaviour
+
+-   Is this facility the closest health facility to your home? (b1_7)
+-   What is the main reason for you to choose coming here today rather than going to the closest facility? (b1_8)
+
+```{r}
+SPA_EXIT_MAIN %>%
+  dplyr::select(b1_7,
+                b1_8,
+                period) %>% 
+  gtsummary::tbl_summary(by = period,
+                         label = list(b1_7 ~ "Closest",
+                                      b1_8 ~ "Main reason"),
+                         digits = ~ c(0, 1),
+                         missing = "no") %>%
+  gtsummary::add_n() %>%
+  gtsummary::modify_spanning_header(c("stat_2", "stat_3") ~ "**post**")
+```
