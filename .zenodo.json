@@ -2,7 +2,7 @@
     "description": "This R code was created to analyse SPA data from the TIMCI project.", 
     "license": "other-open", 
     "title": "timci SPA analysis", 
-    "version": "v0.1", 
+    "version": "v0.12", 
     "upload_type": "software", 
     "publication_date": "2023-11-13", 
     "creators": [
@@ -43,12 +43,12 @@
     "related_identifiers": [
         {
             "scheme": "url", 
-            "identifier": "https://github.com/thaliehln/timci_spa_analyses/tree/v0.1", 
+            "identifier": "https://github.com/thaliehln/timci_spa_analyses/tree/v0.12", 
             "relation": "isSupplementTo"
         }, 
         {
             "scheme": "doi", 
-            "identifier": "", 
+            "identifier": "10.5281/zenodo.10118453", 
             "relation": "isNewVersionOf"
         }
     ]
