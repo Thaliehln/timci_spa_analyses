@@ -1,0 +1,55 @@
+{
+    "description": "This R code was created to analyse SPA data from the TIMCI project.", 
+    "license": "other-open", 
+    "title": "timci SPA analysis", 
+    "version": "v0.1", 
+    "upload_type": "software", 
+    "publication_date": "2023-11-13", 
+    "creators": [
+        { 
+            "affiliation": "Swiss Tropical and Public Health Institute, Allschwil, Switzerland",
+            "name": "Langet, H\u00e9l\u00e8ne",
+            "orcid": "0000-0002-6758-2397"
+        }
+    ],
+    "contributors": [
+        {
+            "affiliation": "Universit\u00e9 Cheikh Anta Diop de Dakar, Dakar, Senegal",
+            "name": "Tine, Jean Augustin Di\u00e9gane",
+            "orcid": "0000-0002-6636-7548",
+            "type": "Other"
+        },
+        {
+            "affiliation": "Ifakara Health Institute, Dar-es-Salaam, Tanzania",
+            "name": "Lwambura, Samwel",
+            "orcid": "0000-0002-6636-7548",
+            "type": "Other"
+        },
+        {
+            "affiliation": "King George's Medical University, Lucknow, Uttar Pradesh, India",
+            "name": "Anmol Jacob",
+            "type": "Other"
+        }
+    ],
+    "access_right": "open",
+    "communities": [
+        {
+            "identifier": "timci"
+        },
+        {
+            "identifier": "swisstph"
+        }
+    ],
+    "related_identifiers": [
+        {
+            "scheme": "url", 
+            "identifier": "https://github.com/thaliehln/timci_spa_analyses/tree/v0.1", 
+            "relation": "isSupplementTo"
+        }, 
+        {
+            "scheme": "doi", 
+            "identifier": "", 
+            "relation": "isNewVersionOf"
+        }
+    ]
+}
