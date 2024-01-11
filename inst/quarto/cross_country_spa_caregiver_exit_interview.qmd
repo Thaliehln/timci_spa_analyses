@@ -1,6 +1,6 @@
 ---
 title: "SPA caregiver exit interviews"
-author: "Hélène LANGET"
+author: "Hélène LANGET, Jean Augustin diégane TINE, Samwel LWAMBURA"
 format:
   docx:
     reference-doc: "../templates/word_styles1.docx"
@@ -12,6 +12,7 @@ execute:
   echo: false
   warning: false
 params:
+  working_directory: "C:/Users/langhe/switchdrive/Private/Code/R/github/timci_spa_analyses"
   country: "senegal"
 ---
 
@@ -28,7 +29,7 @@ params:
 |                       |                                                                                                    |
 |                       |     -   IMCI -- diagnosis / treatment                                                              |
 |                       |                                                                                                    |
-|                       | -   Understand care seeking behaviour (prior to consultation)                                    |
+|                       | -   Understand care seeking behaviour (prior to consultation) \|                                   |
 |                       |                                                                                                    |
 |                       | -   Understanding of referral advice                                                               |
 |                       |                                                                                                    |
@@ -37,79 +38,69 @@ params:
 |                       | -   To capture individual level factors (confounders / effect modifiers / sub-groups) for analyses |
 +-----------------------+----------------------------------------------------------------------------------------------------+
 
-```{r}
-#| output: false
-Sys.setenv(LANG = "en")
-Sys.setlocale("LC_TIME", "English")
-```
+<!-- Import parameters -->
 
 ```{r}
-# Manipulation des données
-library(dplyr)
-# Manipulation des fichiers Excel
-library(openxlsx) 
-#Dates
-library(lubridate)
-# Graphiques
-library(ggplot2) # graphiques
-library(gridExtra)
-library(viridis)
-library(ggrepel)
-library(ComplexUpset)
-# Analyses geographiques
-library(sf)
-library(sp)
-# Décrire la structure des données
-library(skimr) 
-library(DataExplorer)
-# Statistiques descriptives
-library(gtsummary)
-library(ggpubr)
-```
-
-```{r}
+setwd(params$working_directory)
+data_root <- Sys.getenv("TIMCI_DATA_ROOT")
 country <- params$country
 is_kenya <- (country == "kenya")
 is_senegal <- (country == "senegal")
 is_tanzania <- (country == "tanzania")
 is_india <- (country == "india")
 country_dir <- paste0("data_", country)
+
+day0_filename     <- file.path(data_root, country_dir, "main/02_timci_day0_data.xlsx")
+spa_exit_filename <- file.path(data_root, country_dir, "spa/13_timci_spa_exit_interview_data.xlsx")
+facility_filename <- file.path(data_root, country_dir, "timci_research_facilities.xlsx")
+```
+
+<!-- Import functions -->
+
+```{r}
+#| file: ../../R/timci_analysis_libraries.R
 ```
 
 ```{r}
-#| eval: !expr is_tanzania
-arm_comparisons <- list(c("Arm I", "Arm III"),
-                        c("Arm II", "Arm III"))
+#| file: ../../R/visualisation_utils.R
 ```
 
 ```{r}
-fs1 <- 16
-fs2 <- 6
+#| file: ../../R/context_utils.R
 ```
 
+<!-- Import comparisons -->
+
 ```{r}
-day0_df <- openxlsx::read.xlsx(paste0("../", country_dir ,"/main/02_timci_day0_data.xlsx")) %>%
+timci_spa_comparisons(country)
+```
+
+<!-- Load data -->
+
+```{r}
+
+day0_df <- openxlsx::read.xlsx(day0_filename, sheet = "Sheet 1") %>%
   dplyr::mutate(week = lubridate::floor_date(as.Date(date_visit), "week", week_start = getOption("lubridate.week.start", 1))) %>%
   dplyr::rename(date = date_visit)
 ```
 
 ```{r}
-SPA_EXIT_MAIN <- openxlsx::read.xlsx(paste0("../", country_dir ,"/spa/13_timci_spa_exit_interview_data.xlsx")) %>%
+SPA_EXIT_MAIN <- openxlsx::read.xlsx(spa_exit_filename, sheet = "Sheet 1") %>%
   dplyr::mutate(week = lubridate::floor_date(as.Date(date), "week", week_start = getOption("lubridate.week.start", 1))) %>% 
   dplyr::mutate(month = lubridate::floor_date(as.Date(date), "month", week_start = getOption("lubridate.week.start", 1))) %>% 
   dplyr::rename(fid = fcode)
 ```
 
 ```{r}
-hf_coords <- openxlsx::read.xlsx(paste0("../", country_dir ,"/timci_research_facilities.xlsx"))
+hf_coords <- openxlsx::read.xlsx(facility_filename, sheet = "Sheet1")
 ```
 
 ```{r}
 #| eval: !expr is_tanzania
 hf_coords <- hf_coords %>%
-  dplyr::mutate(intervention = replace(intervention, intervention == 0, "Arm III"),
-                intervention = replace(intervention, intervention == 1, "Arm II"),
-                intervention = replace(intervention, intervention == 2, "Arm I"))
+  dplyr::mutate(comparison = replace(intervention, intervention == 0, "Arm III"),
+                comparison = replace(intervention, intervention == 1, "Arm II"),
+                comparison = replace(intervention, intervention == 2, "Arm I"))
 ```
 
 ```{r}
